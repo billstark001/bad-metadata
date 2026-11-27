@@ -1,0 +1,8 @@
+/bin/
+/dist/
+/work/
+/.badmeta-quarantine/
+*.log
+coverage.out
+.DS_Store
+._*

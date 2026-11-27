@@ -1,0 +1,77 @@
+package gui
+
+// Product strings stay separate from the filesystem operations. Low-level
+// filesystem error details retain their original wording in either language.
+var messages = map[string][2]string{
+	"title":              {"Bad Metadata", "Bad Metadata"},
+	"subtitle":           {"Preview macOS metadata, then quarantine or delete it.", "预览 macOS 元数据，然后隔离或删除。"},
+	"language":           {"Language", "语言"},
+	"root":               {"Folder to scan", "扫描文件夹"},
+	"rootPlaceholder":    {"Enter a folder or drive path", "输入文件夹或磁盘路径"},
+	"browse":             {"Browse…", "浏览…"},
+	"categories":         {"Metadata categories", "元数据类别"},
+	"appledouble":        {"AppleDouble (._*)", "AppleDouble（._*）"},
+	"dsstore":            {".DS_Store", ".DS_Store"},
+	"spotlight":          {"Spotlight", "Spotlight"},
+	"fsevents":           {"FSEvents", "FSEvents"},
+	"trashes":            {"Trashes (optional)", "废纸篓（可选）"},
+	"scan":               {"Preview", "预览"},
+	"cancel":             {"Cancel", "取消"},
+	"mode":               {"Cleanup method", "清理方式"},
+	"quarantineMode":     {"Quarantine (recoverable)", "隔离（可恢复）"},
+	"deleteMode":         {"Delete permanently", "永久删除"},
+	"clean":              {"Clean previewed items…", "清理预览项目…"},
+	"export":             {"Export report…", "导出报告…"},
+	"preview":            {"Preview and activity", "预览与操作记录"},
+	"type":               {"Type / status", "类别／状态"},
+	"path":               {"Relative path", "相对路径"},
+	"details":            {"Details", "详情"},
+	"match":              {"Match", "匹配"},
+	"warning":            {"Issue", "问题"},
+	"quarantined":        {"Quarantined", "已隔离"},
+	"deleted":            {"Deleted", "已删除"},
+	"restored":           {"Restored", "已恢复"},
+	"directory":          {"Directory", "文件夹"},
+	"file":               {"File", "文件"},
+	"empty":              {"Choose categories and preview a folder to review matching items.", "选择类别并预览文件夹，以查看匹配项目。"},
+	"summary":            {"%d matching items · %s · %d issues", "%d 个匹配项目 · %s · %d 个问题"},
+	"result":             {"%d completed · %d issues", "%d 项已完成 · %d 个问题"},
+	"session":            {"Quarantine session", "隔离会话"},
+	"sessionPlaceholder": {"A session folder containing manifest.json", "包含 manifest.json 的会话文件夹"},
+	"restore":            {"Restore…", "恢复…"},
+	"restoreHint":        {"Restore preserves existing files and reports conflicts.", "恢复时保留已有文件，并报告冲突。"},
+	"ready":              {"Ready. Preview does not change files.", "就绪。预览不会修改文件。"},
+	"stale":              {"Settings changed. Preview again before cleaning.", "设置已更改，请重新预览后清理。"},
+	"scanning":           {"Scanning…", "正在扫描…"},
+	"cleaning":           {"Cleaning…", "正在清理…"},
+	"restoring":          {"Restoring…", "正在恢复…"},
+	"canceling":          {"Cancel requested. Finishing the current operation…", "已请求取消，正在结束当前操作…"},
+	"done":               {"Finished. Review the activity and any issues above.", "已完成，请查看上方记录及问题。"},
+	"cancelled":          {"Cancelled. Completed operations are shown above.", "已取消。上方显示已完成的操作。"},
+	"exported":           {"Report exported.", "报告已导出。"},
+	"failed":             {"Operation failed", "操作失败"},
+	"chooseRoot":         {"Choose a folder to scan", "选择要扫描的文件夹"},
+	"chooseSession":      {"Choose a quarantine session", "选择隔离会话"},
+	"exportTitle":        {"Export report as JSON", "将报告导出为 JSON"},
+	"confirmQuarantine":  {"Quarantine %d matching items?", "隔离 %d 个匹配项目？"},
+	"quarantineDetail":   {"Items will move to a quarantine session on the same drive. The session path will appear below so you can restore them.", "项目将移至同一磁盘上的隔离会话。会话路径会显示在下方，可用于恢复。"},
+	"confirmDelete":      {"Permanently delete %d matching items?", "永久删除 %d 个匹配项目？"},
+	"deleteDetail":       {"This permanently removes the previewed files and directories, including their contents. It cannot be undone.", "这会永久删除预览中的文件和文件夹，包括其内容，且无法撤销。"},
+	"confirmRestore":     {"Restore this quarantine session?", "恢复此隔离会话？"},
+	"restoreDetail":      {"Items will move back to their original locations. Existing files will never be overwritten.", "项目将移回原始位置，已有文件不会被覆盖。"},
+	"quarantineAction":   {"Quarantine", "隔离"},
+	"deleteAction":       {"Delete permanently", "永久删除"},
+	"restoreAction":      {"Restore", "恢复"},
+	"json":               {"JSON files", "JSON 文件"},
+}
+
+func (a *app) text(key string) string {
+	value, ok := messages[key]
+	if !ok {
+		return key
+	}
+	if a.language == "简体中文" {
+		return value[1]
+	}
+	return value[0]
+}
