@@ -163,3 +163,24 @@ func TestInterruptedRestoreRecognizesAlreadyMovedFileAndUpdatesJournal(t *testin
 	}
 	assertFixture(t, root, ".DS_Store", []byte("original metadata"))
 }
+
+func TestRestoreAcceptsEquivalentRootPathCasing(t *testing.T) {
+	root, session := quarantinedFixture(t)
+	upper := strings.ToUpper(root)
+	upperInfo, err := os.Stat(upper)
+	if err != nil {
+		t.Skip("fixture filesystem is case-sensitive")
+	}
+	info, err := os.Stat(root)
+	if err != nil || !os.SameFile(info, upperInfo) {
+		t.Skip("upper-case path names a different directory")
+	}
+	m := readFixtureManifest(t, session)
+	m.Root = upper
+	writeFixtureManifest(t, session, m)
+	result, err := Restore(context.Background(), session)
+	if err != nil || len(result.Issues) != 0 || len(result.Completed) != 1 {
+		t.Fatalf("equivalent-casing restore = %#v, %v", result, err)
+	}
+	assertFixture(t, root, ".DS_Store", []byte("original metadata"))
+}

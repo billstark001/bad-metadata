@@ -241,7 +241,7 @@ func Restore(ctx context.Context, sessionPath string) (Result, error) {
 	if err != nil {
 		return result, fmt.Errorf("invalid quarantine manifest: %w", err)
 	}
-	if m.Schema != 1 || filepath.Clean(m.Root) != root {
+	if m.Schema != 1 || !sameRootPath(r, m.Root, root) {
 		return result, errors.New("manifest schema or original root does not match session")
 	}
 	if err = validateRecords(m.Records); err != nil {
@@ -323,6 +323,24 @@ func Restore(ctx context.Context, sessionPath string) (Result, error) {
 		return result, fmt.Errorf("restored files but could not update journal: %w", err)
 	}
 	return result, nil
+}
+
+func sameRootPath(r *os.Root, saved, current string) bool {
+	saved = filepath.Clean(saved)
+	if saved == current {
+		return true
+	}
+	// Dialogs may normalize drive-letter or directory casing. Verify physical
+	// identity as well, so case-sensitive volumes still distinguish both names.
+	if !strings.EqualFold(saved, current) {
+		return false
+	}
+	savedInfo, err := os.Stat(saved)
+	if err != nil {
+		return false
+	}
+	currentInfo, err := r.Stat(".")
+	return err == nil && os.SameFile(savedInfo, currentInfo)
 }
 
 func ensureParents(r *os.Root, path string) error {
