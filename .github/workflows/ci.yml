@@ -26,6 +26,15 @@ jobs:
         run: |
           go run ./scripts/tasks.go fmt-check
           go run ./scripts/tasks.go version-check
+      - name: Verify generated application icons and Windows resources
+        run: |
+          go run ./scripts/tasks.go resources
+          changes=$(git status --porcelain -- assets cmd/badmeta cmd/badmeta-gui)
+          if [[ -n "$changes" ]]; then
+            printf '%s\n' "$changes"
+            echo 'Run make resources and commit the generated outputs.' >&2
+            exit 1
+          fi
       - name: Verify module integrity
         run: |
           go mod download

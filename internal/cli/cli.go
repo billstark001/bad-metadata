@@ -33,6 +33,8 @@ Options:
   --mode MODE    quarantine (default) or delete; valid with clean only.
   --yes, -y      Apply clean or restore. Delete mode is permanent.
   --json        Write the complete plan or result as JSON to standard output.
+  --progress MODE
+                Progress on stderr: auto (terminal only), always, or never.
   --help, -h    Show this help.
   --version     Show the application version.
   --            Treat following arguments as literal paths.
@@ -50,14 +52,15 @@ Examples:
 `
 
 type arguments struct {
-	command string
-	path    string
-	kinds   []cleaner.Kind
-	mode    cleaner.Mode
-	yes     bool
-	json    bool
-	help    bool
-	version bool
+	command  string
+	path     string
+	kinds    []cleaner.Kind
+	mode     cleaner.Mode
+	yes      bool
+	json     bool
+	help     bool
+	version  bool
+	progress string
 }
 
 // Run executes a command and returns a process exit code. Output and diagnostics
@@ -86,6 +89,7 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stderr, "Cancelled.")
 		return 130
 	}
+	ctx = progressContext(ctx, opts.progress, stderr)
 	if opts.command == "restore" {
 		if !opts.yes {
 			fmt.Fprintln(stderr, "No changes made. Add --yes to restore this quarantine session.")
@@ -210,7 +214,7 @@ func outputError(stderr io.Writer, err error) int {
 }
 
 func parse(args []string) (arguments, error) {
-	opts := arguments{command: "scan", kinds: cleaner.DefaultKinds(), mode: cleaner.Quarantine}
+	opts := arguments{command: "scan", kinds: cleaner.DefaultKinds(), mode: cleaner.Quarantine, progress: "auto"}
 	if len(args) == 0 {
 		opts.help = true
 		return opts, nil
@@ -220,7 +224,7 @@ func parse(args []string) (arguments, error) {
 	}
 	var paths []string
 	var typesValue string
-	var typesSet, modeSet, trashes bool
+	var typesSet, modeSet, progressSet, trashes bool
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
 		if arg == "--" {
@@ -251,7 +255,7 @@ func parse(args []string) (arguments, error) {
 			case "--trashes":
 				trashes = true
 			}
-		case "--types", "--mode":
+		case "--types", "--mode", "--progress":
 			if !hasValue {
 				i++
 				if i == len(args) || strings.HasPrefix(args[i], "--") {
@@ -264,11 +268,16 @@ func parse(args []string) (arguments, error) {
 					return opts, errors.New("--types may only be specified once")
 				}
 				typesSet, typesValue = true, value
-			} else {
+			} else if name == "--mode" {
 				if modeSet {
 					return opts, errors.New("--mode may only be specified once")
 				}
 				modeSet, opts.mode = true, cleaner.Mode(value)
+			} else {
+				if progressSet {
+					return opts, errors.New("--progress may only be specified once")
+				}
+				progressSet, opts.progress = true, value
 			}
 		default:
 			if strings.HasPrefix(arg, "-") {
@@ -284,6 +293,9 @@ func parse(args []string) (arguments, error) {
 		return opts, errors.New("exactly one directory path is required")
 	}
 	opts.path = paths[0]
+	if opts.progress != "auto" && opts.progress != "always" && opts.progress != "never" {
+		return opts, fmt.Errorf("unknown progress mode %q; expected auto, always, or never", opts.progress)
+	}
 	if modeSet && opts.command != "clean" {
 		return opts, errors.New("--mode is only valid with clean")
 	}

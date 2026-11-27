@@ -1,0 +1,5 @@
+Generated with the built-in imagegen tool on 2026-11-27.
+Master asset: assets/icon.png. Derived platform assets: icon.ico and icon.icns.
+
+Prompt:
+Use case: logo-brand. Asset type: production desktop application icon for a metadata-cleaning utility named Bad Metadata. Create one refined, distinctive square app icon: a simple light document tile with a folded corner and a compact sweeping brush clearing a few small metadata dots, with one subtle clean sparkle. Modern polished desktop utility style, crisp simplified geometry with gentle depth, restrained high-contrast colors, instantly readable silhouette at 16–32 pixels. Centered balanced composition, generous safe inset, a rounded-square icon tile, transparent canvas outside the tile. No text, no letters, no numbers, no watermark, no Apple logo, no screenshots, no surrounding presentation or multiple variants. 1024 by 1024 pixel master icon. Real alpha transparency outside the icon tile.

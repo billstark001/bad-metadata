@@ -4,7 +4,7 @@ GO ?= go
 CGO_ENABLED ?= 0
 export CGO_ENABLED
 
-.PHONY: all fmt fmt-check vet test race check build run gui package version-check clean
+.PHONY: all fmt fmt-check vet test race check build run gui package resources version-check clean
 
 all: check build
 
@@ -39,6 +39,9 @@ gui:
 
 package:
 	$(GO) run ./scripts/tasks.go package
+
+resources:
+	$(GO) run ./scripts/tasks.go resources
 
 clean:
 	$(GO) run ./scripts/tasks.go clean

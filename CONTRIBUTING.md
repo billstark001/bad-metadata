@@ -20,7 +20,7 @@ Commit history is local until a remote is configured. Repository maintainers sho
 
 ## Versioning and release
 
-`internal/version/VERSION` is the source of truth. Start at `0.1.0`; use `MAJOR.MINOR.PATCH` with no leading `v` in the file. Pre-1.0 minor releases may change APIs; patch releases fix compatible behavior. Update the version file and add a dated changelog entry together, then commit with `chore(release): prepare 0.2.0` or the appropriate release number.
+`internal/version/VERSION` is the source of truth. Start at `0.1.0`; use `MAJOR.MINOR.PATCH` with no leading `v` in the file. Pre-1.0 minor releases may change APIs; patch releases fix compatible behavior. Update the version file and add a dated changelog entry together, run `make resources`, and commit the regenerated Windows resource files with `chore(release): prepare 0.2.0` or the appropriate release number. Changes to `assets/icon.png` also require `make resources` and committed ICO, ICNS, and `.syso` updates.
 
 After checks pass on `main`, run the manual **Release** workflow. It rebuilds and tests the exact revision, checks the matching changelog section, creates or verifies `vMAJOR.MINOR.PATCH`, and publishes platform ZIP files, SHA-256 checksums, and release notes. Release tags must never move to a different revision. The workflow requires the repository's Actions token to have release permissions; no registry or signing credentials are needed.
 

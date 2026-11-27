@@ -17,8 +17,10 @@ import (
 
 // Scan returns a preview only. Links, reparse points, and quarantine stores are
 // never traversed. Metadata directory candidates are treated as single items.
-func Scan(ctx context.Context, root string, opts Options) (Plan, error) {
-	p := Plan{CreatedAt: time.Now().UTC(), Items: []Item{}, Issues: []Issue{}}
+func Scan(ctx context.Context, root string, opts Options) (p Plan, retErr error) {
+	ctx, progress := beginProgress(ctx, "scan", 0)
+	defer func() { progress.finish(retErr) }()
+	p = Plan{CreatedAt: time.Now().UTC(), Items: []Item{}, Issues: []Issue{}}
 	kinds := opts.Kinds
 	if kinds == nil {
 		kinds = DefaultKinds()
@@ -56,6 +58,9 @@ func Scan(ctx context.Context, root string, opts Options) (Plan, error) {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
+		if path != "." {
+			progress.visit(path)
+		}
 		if walkErr != nil {
 			p.Issues = append(p.Issues, Issue{path, walkErr.Error()})
 			return nil
@@ -92,18 +97,26 @@ func Scan(ctx context.Context, root string, opts Options) (Plan, error) {
 			}
 			return nil
 		}
+		progress.candidate(path, 0)
 		fingerprint, size, err := snapshot(ctx, r, path)
 		if err != nil {
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
 			p.Issues = append(p.Issues, Issue{path, err.Error()})
 		} else {
 			p.Items = append(p.Items, Item{Path: path, Kind: kind, IsDir: info.IsDir(), Bytes: size, Fingerprint: fingerprint})
 			p.Bytes += size
+			progress.current.Matches = int64(len(p.Items))
 		}
 		if info.IsDir() {
 			return fs.SkipDir
 		}
 		return nil
 	})
+	if err == nil {
+		err = ctx.Err()
+	}
 	p.approved = append([]Item{}, p.Items...)
 	p.ready = err == nil
 	return p, err
@@ -161,6 +174,7 @@ func snapshot(ctx context.Context, r *os.Root, path string) (string, int64, erro
 		if err := ctx.Err(); err != nil {
 			return err
 		}
+		snapshotProgress(ctx, name, size, name != path)
 		info, err := d.Info()
 		if err != nil {
 			return err
@@ -190,6 +204,7 @@ func snapshot(ctx context.Context, r *os.Root, path string) (string, int64, erro
 				if n > 0 {
 					_, _ = h.Write(buf[:n])
 					size += int64(n)
+					snapshotProgress(ctx, name, size, false)
 				}
 				if readErr != nil {
 					if !errors.Is(readErr, io.EOF) {

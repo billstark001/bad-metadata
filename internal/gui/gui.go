@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/billstark001/bad-metadata/assets"
 	"github.com/billstark001/bad-metadata/internal/cleaner"
 	"github.com/billstark001/bad-metadata/internal/version"
 	"github.com/egoist/mygo"
@@ -29,22 +30,26 @@ type activity struct {
 // app's state is owned by the main thread. Workers capture their inputs and
 // deliver their results with Window.Update; they never retain ui.Element values.
 type app struct {
-	window     *mygo.Window
-	root       string
-	session    string
-	language   string
-	setLocale  func(string)
-	categories []category
-	mode       cleaner.Mode
-	plan       *cleaner.Plan
-	result     *cleaner.Result
-	rows       []activity
-	list       ui.ListState
-	busy       bool
-	status     string
-	lastError  string
-	cancel     context.CancelFunc
-	closed     bool
+	window           *mygo.Window
+	root             string
+	session          string
+	language         string
+	setLocale        func(string)
+	categories       []category
+	mode             cleaner.Mode
+	plan             *cleaner.Plan
+	result           *cleaner.Result
+	rows             []activity
+	list             ui.ListState
+	busy             bool
+	status           string
+	lastError        string
+	cancel           context.CancelFunc
+	closed           bool
+	progress         cleaner.Progress
+	hasProgress      bool
+	progressComplete bool
+	jobID            uint64
 }
 
 func newApp(root string) *app {
@@ -82,6 +87,9 @@ func Run() error {
 			Title: "Bad Metadata", Width: 1040, Height: 780,
 			MinWidth: 860, MinHeight: 680, Content: ui.View(a.view),
 		})
+		if err := a.window.SetIcon(assets.IconPNG); err != nil {
+			a.lastError = err.Error()
+		}
 		a.window.OnClosed(func() {
 			a.closed = true
 			if a.cancel != nil {
@@ -150,6 +158,9 @@ func (a *app) view(c *ui.Context) {
 				a.exportReport()
 			}
 		})
+		if a.hasProgress {
+			a.progressView(c)
+		}
 		ui.Row(c).Gap(12).Children(func() {
 			ui.Text(c, a.text("preview")).Bold().Grow(1)
 			if a.plan != nil {
@@ -211,6 +222,7 @@ func (a *app) invalidatePlan() {
 	a.rows = nil
 	a.list = ui.ListState{}
 	a.status, a.lastError = "stale", ""
+	a.hasProgress, a.progressComplete = false, false
 }
 
 func (a *app) modeLabel() string {
@@ -232,7 +244,17 @@ func (a *app) start(status string) context.Context {
 	ctx, cancel := context.WithCancel(context.Background())
 	a.cancel, a.busy = cancel, true
 	a.status, a.lastError = status, ""
-	return ctx
+	a.jobID++
+	jobID := a.jobID
+	a.progress = cleaner.Progress{Phase: "starting"}
+	a.hasProgress, a.progressComplete = true, false
+	return cleaner.WithProgress(ctx, func(progress cleaner.Progress) {
+		a.update(func() {
+			if a.busy && a.jobID == jobID {
+				a.progress = progress
+			}
+		})
+	})
 }
 
 func (a *app) finish(err error, cancelled bool) {
@@ -241,11 +263,16 @@ func (a *app) finish(err error, cancelled bool) {
 	}
 	a.cancel, a.busy = nil, false
 	a.status = "done"
+	a.progressComplete = err == nil && !cancelled
 	if cancelled || errors.Is(err, context.Canceled) {
 		a.status = "cancelled"
+		a.progress.Phase = "cancelled"
 	} else if err != nil {
 		a.lastError = err.Error()
 		a.status = "failed"
+		a.progress.Phase = "failed"
+	} else {
+		a.progress.Phase = "done"
 	}
 }
 

@@ -63,6 +63,21 @@ var messages = map[string][2]string{
 	"deleteAction":       {"Delete permanently", "永久删除"},
 	"restoreAction":      {"Restore", "恢复"},
 	"json":               {"JSON files", "JSON 文件"},
+	"progress":           {"Operation progress", "操作进度"},
+	"progressScan":       {"%d visited · %d matches", "已扫描 %d 项 · 匹配 %d 项"},
+	"progressItems":      {"%d / %d items · %d%%", "%d / %d 项 · %d%%"},
+	"progressUnknown":    {"Preparing…", "准备中…"},
+	"progressBytes":      {"Read %s", "已读取 %s"},
+	"progressBytesTotal": {"Verified %s / %s", "已验证 %s / %s"},
+	"phase_starting":     {"Starting…", "正在开始…"},
+	"phase_walking":      {"Scanning files…", "正在扫描文件…"},
+	"phase_verifying":    {"Verifying contents…", "正在验证内容…"},
+	"phase_quarantine":   {"Quarantining…", "正在隔离…"},
+	"phase_delete":       {"Deleting…", "正在删除…"},
+	"phase_restoring":    {"Restoring…", "正在恢复…"},
+	"phase_done":         {"Completed", "已完成"},
+	"phase_cancelled":    {"Cancelled", "已取消"},
+	"phase_failed":       {"Failed", "失败"},
 }
 
 func (a *app) text(key string) string {

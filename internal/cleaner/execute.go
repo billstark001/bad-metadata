@@ -30,8 +30,10 @@ type manifest struct {
 
 // Execute applies an in-process preview. An exported JSON preview is not an
 // executable plan. Each candidate is checked again before acting on it.
-func Execute(ctx context.Context, plan Plan, mode Mode) (Result, error) {
-	result := Result{Completed: []string{}, Issues: []Issue{}}
+func Execute(ctx context.Context, plan Plan, mode Mode) (result Result, retErr error) {
+	ctx, progress := beginProgress(ctx, "clean", int64(len(plan.Items)))
+	defer func() { progress.finish(retErr) }()
+	result = Result{Completed: []string{}, Issues: []Issue{}}
 	if mode != Quarantine && mode != Delete {
 		return result, fmt.Errorf("invalid cleanup mode %q", mode)
 	}
@@ -79,13 +81,20 @@ func Execute(ctx context.Context, plan Plan, mode Mode) (Result, error) {
 			result.Cancelled = true
 			return result, err
 		}
+		progress.candidate(item.Path, item.Bytes)
 		if err := validateCandidate(ctx, r, item); err != nil {
 			if ctx.Err() != nil {
 				result.Cancelled = true
 				return result, ctx.Err()
 			}
 			result.Issues = append(result.Issues, Issue{item.Path, err.Error()})
+			progress.advance(int64(index + 1))
 			continue
+		}
+		progress.phase(string(mode))
+		if ctx.Err() != nil {
+			result.Cancelled = true
+			return result, ctx.Err()
 		}
 		if mode == Quarantine {
 			target := session + "/data/" + item.Path
@@ -97,6 +106,7 @@ func Execute(ctx context.Context, plan Plan, mode Mode) (Result, error) {
 			}
 			if err = r.Rename(item.Path, target); err != nil {
 				result.Issues = append(result.Issues, Issue{item.Path, err.Error()})
+				progress.advance(int64(index + 1))
 				continue
 			}
 			result.Completed = append(result.Completed, item.Path)
@@ -108,11 +118,20 @@ func Execute(ctx context.Context, plan Plan, mode Mode) (Result, error) {
 				result.Completed = append(result.Completed, item.Path)
 			}
 		}
+		progress.advance(int64(index + 1))
+	}
+	if ctx.Err() != nil {
+		result.Cancelled = true
+		return result, ctx.Err()
 	}
 	if mode == Quarantine {
 		if err = saveManifest(r, session, m); err != nil {
 			return result, fmt.Errorf("files were quarantined; keep session for recovery: %w", err)
 		}
+	}
+	if ctx.Err() != nil {
+		result.Cancelled = true
+		return result, ctx.Err()
 	}
 	return result, nil
 }
@@ -199,8 +218,10 @@ func saveManifest(r *os.Root, session string, m manifest) error {
 
 // Restore moves a session's saved entries back without replacing any existing
 // destination. The store must stay under the original root. It is never purged.
-func Restore(ctx context.Context, sessionPath string) (Result, error) {
-	result := Result{Completed: []string{}, Issues: []Issue{}}
+func Restore(ctx context.Context, sessionPath string) (result Result, retErr error) {
+	ctx, progress := beginProgress(ctx, "restore", 0)
+	defer func() { progress.finish(retErr) }()
+	result = Result{Completed: []string{}, Issues: []Issue{}}
 	abs, err := filepath.Abs(sessionPath)
 	if err != nil || sessionPath == "" {
 		return result, errors.New("a quarantine session directory is required")
@@ -247,13 +268,18 @@ func Restore(ctx context.Context, sessionPath string) (Result, error) {
 	if err = validateRecords(m.Records); err != nil {
 		return result, err
 	}
+	progress.current.Total = int64(len(m.Records))
+	progress.current.Phase = "restoring"
+	progress.emit(true)
 	for i := range m.Records {
 		entry := &m.Records[i]
 		if err := ctx.Err(); err != nil {
 			result.Cancelled = true
 			return result, err
 		}
+		progress.candidate(entry.Path, entry.Bytes)
 		if entry.State == "restored" {
+			progress.advance(int64(i + 1))
 			continue
 		}
 		source := session + "/data/" + entry.Path
@@ -262,17 +288,24 @@ func Restore(ctx context.Context, sessionPath string) (Result, error) {
 			// "moved". Recognize the exact restored contents without moving again.
 			if checkRelative(r, entry.Path) == nil {
 				fingerprint, _, snapErr := snapshot(ctx, r, entry.Path)
+				if ctx.Err() != nil {
+					result.Cancelled = true
+					return result, ctx.Err()
+				}
 				if snapErr == nil && fingerprint == entry.Fingerprint {
 					entry.State = "restored"
+					progress.advance(int64(i + 1))
 					continue
 				}
 			}
 			if entry.State == "pending" {
+				progress.advance(int64(i + 1))
 				continue // The journal was saved before an unsuccessful move.
 			}
 		}
 		if err = checkRelative(r, source); err != nil {
 			result.Issues = append(result.Issues, Issue{entry.Path, err.Error()})
+			progress.advance(int64(i + 1))
 			continue
 		}
 		fingerprint, _, snapErr := snapshot(ctx, r, source)
@@ -282,25 +315,35 @@ func Restore(ctx context.Context, sessionPath string) (Result, error) {
 		}
 		if snapErr != nil || fingerprint != entry.Fingerprint {
 			result.Issues = append(result.Issues, Issue{entry.Path, "quarantined contents changed or could not be read"})
+			progress.advance(int64(i + 1))
 			continue
 		}
 		sourceInfo, statErr := r.Lstat(source)
 		if statErr != nil {
 			result.Issues = append(result.Issues, Issue{entry.Path, statErr.Error()})
+			progress.advance(int64(i + 1))
 			continue
 		}
 		kind, matchErr := match(r, source, sourceInfo)
 		if matchErr != nil || kind != entry.Kind || sourceInfo.IsDir() != entry.IsDir {
 			result.Issues = append(result.Issues, Issue{entry.Path, "manifest metadata type does not match quarantined entry"})
+			progress.advance(int64(i + 1))
 			continue
+		}
+		progress.phase("restoring")
+		if ctx.Err() != nil {
+			result.Cancelled = true
+			return result, ctx.Err()
 		}
 		parent := filepath.ToSlash(filepath.Dir(entry.Path))
 		if err = ensureParents(r, parent); err != nil {
 			result.Issues = append(result.Issues, Issue{entry.Path, err.Error()})
+			progress.advance(int64(i + 1))
 			continue
 		}
 		if _, err = r.Lstat(entry.Path); !errors.Is(err, fs.ErrNotExist) {
 			result.Issues = append(result.Issues, Issue{entry.Path, "destination already exists or cannot be checked; nothing overwritten"})
+			progress.advance(int64(i + 1))
 			continue
 		}
 		if err = checkAbsolute(root); err != nil {
@@ -314,13 +357,23 @@ func Restore(ctx context.Context, sessionPath string) (Result, error) {
 		// The native no-replace operation makes the conflict check atomic too.
 		if err = renameNoReplace(r, source, entry.Path); err != nil {
 			result.Issues = append(result.Issues, Issue{entry.Path, err.Error()})
+			progress.advance(int64(i + 1))
 			continue
 		}
 		result.Completed = append(result.Completed, entry.Path)
 		entry.State = "restored"
+		progress.advance(int64(i + 1))
+	}
+	if ctx.Err() != nil {
+		result.Cancelled = true
+		return result, ctx.Err()
 	}
 	if err = saveManifest(r, session, m); err != nil {
 		return result, fmt.Errorf("restored files but could not update journal: %w", err)
+	}
+	if ctx.Err() != nil {
+		result.Cancelled = true
+		return result, ctx.Err()
 	}
 	return result, nil
 }

@@ -27,7 +27,7 @@ func main() {
 
 func task() error {
 	if len(os.Args) < 2 {
-		return fmt.Errorf("usage: go run scripts/tasks.go fmt|fmt-check|version-check|build|package [OS [ARCH]]|race|clean")
+		return fmt.Errorf("usage: go run scripts/tasks.go fmt|fmt-check|version-check|build|package [OS [ARCH]]|resources|race|clean")
 	}
 	if _, err := os.Stat("internal/version/VERSION"); err != nil {
 		return fmt.Errorf("run this task from the repository root: %w", err)
@@ -40,6 +40,8 @@ func task() error {
 		return err
 	case "race":
 		return runGo(map[string]string{"CGO_ENABLED": "1"}, "test", "-race", "./...")
+	case "resources":
+		return resources()
 	case "build":
 		return build(runtime.GOOS, runtime.GOARCH, "bin")
 	case "package":
@@ -84,7 +86,7 @@ func task() error {
 
 func format(check bool) error {
 	var files []string
-	for _, root := range []string{"cmd", "internal", "scripts"} {
+	for _, root := range []string{"assets", "cmd", "internal", "scripts"} {
 		err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 			if err != nil {
 				return err
@@ -165,6 +167,28 @@ func runGo(environment map[string]string, args ...string) error {
 	}
 	command.Stdout, command.Stderr = os.Stdout, os.Stderr
 	return command.Run()
+}
+
+func resources() error {
+	version, _, err := releaseInfo()
+	if err != nil {
+		return err
+	}
+	if err := runGo(nil, "run", "./scripts/icon.go"); err != nil {
+		return err
+	}
+	for _, name := range []string{"cli", "gui"} {
+		command := "badmeta"
+		if name == "gui" {
+			command += "-gui"
+		}
+		if err := runGo(nil, "run", "github.com/tc-hib/go-winres@v0.3.3", "make",
+			"--in", "assets/windows-"+name+".json", "--out", "cmd/"+command+"/rsrc",
+			"--arch", "amd64,arm64", "--file-version", version, "--product-version", version); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func build(goos, arch, directory string) error {
@@ -261,7 +285,7 @@ func archive(path, directory, goos, version string) (err error) {
 		}
 		return zipBytes(writer, name, data, mode)
 	}
-	for _, name := range []string{"README.md", "LICENSE", "CHANGELOG.md", "CONTRIBUTING.md", "docs/architecture.md"} {
+	for _, name := range []string{"README.md", "LICENSE", "CHANGELOG.md", "CONTRIBUTING.md", "docs/architecture.md", "assets/icon.png", "assets/icon-prompt.txt"} {
 		if err := add(name, name, 0o644); err != nil {
 			return err
 		}
@@ -280,6 +304,9 @@ func archive(path, directory, goos, version string) (err error) {
 	if err := add("Bad Metadata.app/Contents/MacOS/badmeta-gui", filepath.Join(directory, "badmeta-gui"), 0o755); err != nil {
 		return err
 	}
+	if err := add("Bad Metadata.app/Contents/Resources/icon.icns", "assets/icon.icns", 0o644); err != nil {
+		return err
+	}
 	plist := fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
@@ -287,6 +314,7 @@ func archive(path, directory, goos, version string) (err error) {
 <key>CFBundleDisplayName</key><string>Bad Metadata</string>
 <key>CFBundleIdentifier</key><string>io.github.billstark001.badmetadata</string>
 <key>CFBundleExecutable</key><string>badmeta-gui</string>
+<key>CFBundleIconFile</key><string>icon.icns</string>
 <key>CFBundlePackageType</key><string>APPL</string>
 <key>CFBundleShortVersionString</key><string>%s</string>
 <key>CFBundleVersion</key><string>%s</string>
